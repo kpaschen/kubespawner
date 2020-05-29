@@ -286,6 +286,28 @@ async def test_default_profile():
         assert getattr(spawner, key) == value
 
 
+@pytest.mark.asyncio
+async def test_stop_pod_reflector(kube_ns, kube_client):
+    c = Config()
+    c.KubeSpawner.namespace = kube_ns
+    c.KubeSpawner.start_timeout = 30  # Do not wait very long.
+    spawner = KubeSpawner(hub=Hub(), user=MockUser(), config=c)
+
+    # start the spawner
+    await spawner.start()
+
+    # Manually stop the pod reflector.
+    spawner.pod_reflector.stop()
+    assert spawner.pod_reflector._stop_event.is_set()
+
+    # This will make the spawner notice that the pod status isn't updating.
+    # The spawner will then restart the pod reflector.
+    await spawner.stop()
+
+    # Pod reflector is running again.
+    assert not spawner.pod_reflector._stop_event.is_set()
+
+
 def test_pod_name_no_named_servers():
     c = Config()
     c.JupyterHub.allow_named_servers = False
