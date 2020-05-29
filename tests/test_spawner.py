@@ -126,6 +126,39 @@ async def test_spawn(kube_ns, kube_client, config):
 
 
 @pytest.mark.asyncio
+async def test_spawn_pending_pods(kube_ns, kube_client):
+    """Spawner can deal with pods that are pending."""
+    c = Config()
+    # Make a config where the fake-jupyter pod cannot be scheduled so it
+    # will always be in a pending state.
+    # You can use any setting here that will be impossible to satisfy on the
+    # minikube cluster. 
+    c.KubeSpawner.node_selector = {'disktype': 'ssd'}
+    c.KubeSpawner.namespace = kube_ns
+    c.KubeSpawner.start_timeout = 30  # Do not wait very long.
+    spawner = KubeSpawner(hub=Hub(), user=MockUser(), config=c)
+    with pytest.raises(TimeoutError) as te:
+      await spawner.start()
+    assert('pod/jupyter-fake did not start' in str(te.value))
+
+    pods = kube_client.list_namespaced_pod(kube_ns).items
+    assert pods[0].status.phase == 'Pending'
+    status = await spawner.poll()
+    # Pending state actually makes poll return None
+    assert status is None
+    await spawner.stop()
+
+    # verify pod is gone
+    pods = kube_client.list_namespaced_pod(kube_ns).items
+    pod_names = [p.metadata.name for p in pods]
+    assert "jupyter-%s" % spawner.user.name not in pod_names
+
+    # verify exit status
+    status = await spawner.poll()
+    assert isinstance(status, int)
+
+
+@pytest.mark.asyncio
 async def test_spawn_progress(kube_ns, kube_client, config):
     spawner = KubeSpawner(hub=Hub(), user=MockUser(name="progress"), config=config)
     # empty spawner isn't running
