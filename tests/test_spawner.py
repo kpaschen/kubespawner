@@ -159,6 +159,18 @@ async def test_spawn_pending_pods(kube_ns, kube_client):
 
 
 @pytest.mark.asyncio
+async def test_spawn_timeout(kube_ns, kube_client):
+    c = Config()
+    # Set the network receive timeout so low it's impossible to satisfy.
+    c.KubeSpawner.request_timeout = 0
+    spawner = KubeSpawner(hub=Hub(), user=MockUser(), config=c)
+    with pytest.raises(TimeoutError) as te:
+      await spawner.start()
+
+    await spawner.stop()
+
+
+@pytest.mark.asyncio
 async def test_spawn_progress(kube_ns, kube_client, config):
     spawner = KubeSpawner(hub=Hub(), user=MockUser(name="progress"), config=config)
     # empty spawner isn't running
