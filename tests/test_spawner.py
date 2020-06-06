@@ -176,12 +176,13 @@ def patched_spawner(config):
 @pytest.mark.asyncio
 async def test_spawn_watcher_exception(kube_ns, kube_client, config, caplog, patched_spawner):
     with pytest.raises(TimeoutError) as te:
-        await spawner.start()
+        # patched_spawner._start_watching_pods(replace=True)
+        await patched_spawner.start()
     assert te is not None
     records = caplog.record_tuples
     assert ("traitlets", logging.ERROR, 'Error when watching resources, retrying in 0.2s') in records
     assert ("traitlets", logging.CRITICAL, 'Pods reflector failed, halting Hub.') in records
-    await spawner.stop()
+    await patched_spawner.stop()
 
 
 @pytest.mark.asyncio
