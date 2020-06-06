@@ -8,6 +8,7 @@ from kubespawner import KubeSpawner
 from traitlets.config import Config
 from unittest.mock import Mock
 import json
+import logging
 import os
 import pytest
 
@@ -159,14 +160,33 @@ async def test_spawn_pending_pods(kube_ns, kube_client):
 
 
 @pytest.mark.asyncio
-async def test_spawn_timeout(kube_ns, kube_client):
-    c = Config()
-    # Set the network receive timeout so low it's impossible to satisfy.
-    c.KubeSpawner.request_timeout = 0
-    spawner = KubeSpawner(hub=Hub(), user=MockUser(), config=c)
+async def test_spawn_watcher_exception(kube_ns, kube_client, config, caplog):
+    spawner = KubeSpawner(hub=Hub(), user=MockUser(), config=config)
+    real_list_method_name = spawner.pod_reflector.list_method_name
+    # This is one way of forcing an exception to be thrown from the watcher,
+    # and it could happen if someone were to implement a custom pod reflector.
+    spawner.pod_reflector.list_method_name = 'NonExistentMethod'
     with pytest.raises(TimeoutError) as te:
-      await spawner.start()
+        await spawner.start()
+    records = caplog.record_tuples
+    assert ("traitlets", logging.WARN, 'Read timeout watching pods, reconnecting') in records
+    assert ("traitlets", logging.ERROR, 'Error when watching resources, retrying in 0.2s') in records
+    assert ("traitlets", logging.CRITICAL, 'Pods reflector failed, halting Hub.') in records
+    # I do not know why the stop() call times out here, it really shouldn't.
+    with pytest.raises(TimeoutError) as te2:
+        await spawner.stop()
+    spawner.pod_reflector.list_method_name = real_list_method_name
+    await spawner.stop()
 
+
+@pytest.mark.asyncio
+async def test_spawn_watcher_reflector_started_twice(kube_ns, kube_client, config):
+    spawner = KubeSpawner(hub=Hub(), user=MockUser(), config=config)
+    await spawner.start()
+
+    with pytest.raises(ValueError) as ve:
+        spawner.pod_reflector.start()
+    assert ('Thread watching for resources is already running' in str(ve.value))
     await spawner.stop()
 
 
