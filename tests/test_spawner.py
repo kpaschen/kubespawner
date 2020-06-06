@@ -159,23 +159,28 @@ async def test_spawn_pending_pods(kube_ns, kube_client):
     assert isinstance(status, int)
 
 
-@pytest.mark.asyncio
-async def test_spawn_watcher_exception(kube_ns, kube_client, config, caplog):
+# A fixture just for patching the spawner for the spawn_watcher_exception test.
+# This ensures that the patch will be undone even if the test fails; otherwise
+# the patch may stay active and cause subsequent tests to fail.
+@pytest.fixture(scope="function")
+def patched_spawner(config):
     spawner = KubeSpawner(hub=Hub(), user=MockUser(), config=config)
     real_list_method_name = spawner.pod_reflector.list_method_name
     # This is one way of forcing an exception to be thrown from the watcher,
     # and it could happen if someone were to implement a custom pod reflector.
     spawner.pod_reflector.list_method_name = 'NonExistentMethod'
+    yield spawner
+    spawner.pod_reflector.list_method_name = real_list_method_name
+
+
+@pytest.mark.asyncio
+async def test_spawn_watcher_exception(kube_ns, kube_client, config, caplog, patched_spawner):
     with pytest.raises(TimeoutError) as te:
         await spawner.start()
+    assert te is not None
     records = caplog.record_tuples
-    assert ("traitlets", logging.WARN, 'Read timeout watching pods, reconnecting') in records
     assert ("traitlets", logging.ERROR, 'Error when watching resources, retrying in 0.2s') in records
     assert ("traitlets", logging.CRITICAL, 'Pods reflector failed, halting Hub.') in records
-    # I do not know why the stop() call times out here, it really shouldn't.
-    with pytest.raises(TimeoutError) as te2:
-        await spawner.stop()
-    spawner.pod_reflector.list_method_name = real_list_method_name
     await spawner.stop()
 
 
