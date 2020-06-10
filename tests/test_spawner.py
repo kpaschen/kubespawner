@@ -141,7 +141,7 @@ async def test_spawn_pending_pods(kube_ns, kube_client):
     spawner = KubeSpawner(hub=Hub(), user=MockUser(), config=c)
     with pytest.raises(TimeoutError) as te:
       await spawner.start()
-    assert('pod/jupyter-fake did not start' in str(te.value))
+    assert 'pod/jupyter-fake did not start' in str(te.value)
 
     pods = kube_client.list_namespaced_pod(kube_ns).items
     assert pods[0].status.phase == 'Pending'
@@ -161,7 +161,7 @@ async def test_spawn_pending_pods(kube_ns, kube_client):
 
 
 @pytest.mark.asyncio
-async def test_spawn_watcher_reflector_started_twice(kube_ns, kube_client, config):
+async def test_spawn_watcher_reflector_started_twice(config):
     spawner = KubeSpawner(hub=Hub(), user=MockUser(), config=config)
     await spawner.start()
 
@@ -172,17 +172,17 @@ async def test_spawn_watcher_reflector_started_twice(kube_ns, kube_client, confi
 
 
 @pytest.mark.asyncio
-async def test_spawn_pvc(kube_ns, kube_client):
-  c = Config()
-  c.KubeSpawner.storage_pvc_ensure = True
-  spawner = KubeSpawner(hub=Hub(), user=MockUser(), config=c)
-  # Since no storage amount is specified, the pvc will not be created.
-  # This lets us test the ApiException handling and it also means we do not have
-  # to clean up the pvc afterwards.
-  with pytest.raises(ApiException) as ae:
-      await spawner.start()
-  assert('Unprocessable Entity' in str(ae.value))
-  await spawner.stop()
+async def test_spawn_pvc():
+    c = Config()
+    c.KubeSpawner.storage_pvc_ensure = True
+    spawner = KubeSpawner(hub=Hub(), user=MockUser(), config=c)
+    # Since no storage amount is specified, the pvc will not be created.
+    # This lets us test the ApiException handling and it also means we do not have
+    # to clean up the pvc afterwards.
+    with pytest.raises(ApiException) as ae:
+        await spawner.start()
+    assert 'Unprocessable Entity' in str(ae.value)
+    await spawner.stop()
 
 
 @pytest.mark.asyncio
