@@ -1896,6 +1896,7 @@ class KubeSpawner(Spawner):
         except TimeoutError:
             self.log.error("Pod %s did not disappear, restarting pod reflector", self.pod_name)
             self._start_watching_pods(replace=True)
+            raise
 
     @default('env_keep')
     def _env_keep_default(self):
